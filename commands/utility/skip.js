@@ -24,7 +24,7 @@ module.exports = {
                         iconURL: 'https://tenor.com/pt-BR/view/legs-spongebob-squarepants-patrick-star-gif-17427508536255721078',
                         url: 'https://www.google.com'
                     })
-                    .setDescription('**Vamo pra proxima cleide**');
+                    .setDescription('**Próxima música!**');
                 return interaction.reply({ embeds: [embed] });
             } else {
                 const embed = new EmbedBuilder()

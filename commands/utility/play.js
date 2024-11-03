@@ -65,7 +65,9 @@ module.exports = {
                 if(player.state.status === AudioPlayerStatus.Idle) {
                     playNextSong(currentConnection, interaction);
                 }
-                await interaction.followUp('**👌 Música adicionada a fila!**');
+                if(!query.match(/^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/)) {
+                    await interaction.followUp('**👌 Música adicionada a fila!**');
+                }
             });
             
         } catch(error) {
@@ -116,54 +118,74 @@ module.exports = {
 
 async function getSongInfo(query, interaction) {
     let searchResult;
-    try {
-        searchResult = await YouTubeSearch(query, youtubeSearchOptions);
-    } catch (error) {
-        console.log(error);
-        return await interaction.reply({ content: "Ocorreu um erro ao procurar a música!", ephemeral: true });
+    if(query.match(/^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/)) {
+        searchResult = await ytdl.getBasicInfo(query);
+        if(!searchResult) {
+            return await interaction.reply({ content: "Nenhum resultado encontrado!", ephemeral: true });
+        }
+        const video = searchResult.videoDetails;
+        const videoDetails = {
+                title: video.title,
+                link: video.video_url,
+                channelTitle: video.author.name,
+                channelId: video.author.id,
+                description: video.description,
+                kind: video.category,
+                thumbnails: video.thumbnails
+            };
+        enqueue({ video: videoDetails, message: interaction });
+        interaction.reply('**👌 Música adicionada a fila!**');
+    } else {
+        
+        try {
+            searchResult = await YouTubeSearch(query, youtubeSearchOptions);
+        } catch (error) {
+            console.log(error);
+            return await interaction.reply({ content: "Ocorreu um erro ao procurar a música!", ephemeral: true });
+        }
+
+
+        if(!searchResult || searchResult.length === 0) {
+            return await interaction.reply({ content: "Nenhum resultado encontrado!", ephemeral: true });
+        }
+
+
+        const row = new ActionRowBuilder()
+        let desc = "";
+        let buttons = [];
+
+        for(let i = 0; i < searchResult.results.length; i++) {
+            const result = searchResult.results[i];
+            buttons.push(new ButtonBuilder()
+                .setLabel(`${i + 1}`)
+                .setStyle(ButtonStyle.Primary)
+                .setCustomId(`${i+1}`)
+            )
+
+            desc += `**${i + 1}.** [${result.title}](${result.link})\n`;
+        }
+
+        row.addComponents(buttons);
+
+        const embed = new EmbedBuilder()
+            .setAuthor({
+                name: 'Resultado da busca',
+                iconURL: 'https://media1.tenor.com/m/mmiOzcM5w7gAAAAd/seu-jorge-bufo-tocando-guitarra.gif',
+                url: 'https://www.google.com'
+            })
+            .setDescription(`\n ‎ \n **Opções:\n** ${desc}`)
+            .setColor('#ffffff')
+            .setFooter({ text: 'TWBot' });
+
+        const response = await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+
+        const collectorFilter = i => i.user.id === interaction.user.id;
+        
+        const confirmation = await response.awaitMessageComponent({ filter: collectorFilter, time: 60_000 }).then(i => {
+            enqueue({ video: searchResult.results[i.customId - 1], message: interaction });
+            interaction.deleteReply();
+        });
     }
-
-
-    if(!searchResult || searchResult.length === 0) {
-        return await interaction.reply({ content: "Nenhum resultado encontrado!", ephemeral: true });
-    }
-
-
-    const row = new ActionRowBuilder()
-    let desc = "";
-    let buttons = [];
-
-    for(let i = 0; i < searchResult.results.length; i++) {
-        const result = searchResult.results[i];
-        buttons.push(new ButtonBuilder()
-            .setLabel(`${i + 1}`)
-            .setStyle(ButtonStyle.Primary)
-            .setCustomId(`${i+1}`)
-        )
-
-        desc += `**${i + 1}.** [${result.title}](${result.link})\n`;
-    }
-
-    row.addComponents(buttons);
-
-    const embed = new EmbedBuilder()
-        .setAuthor({
-            name: 'Resultado da busca',
-            iconURL: 'https://media1.tenor.com/m/mmiOzcM5w7gAAAAd/seu-jorge-bufo-tocando-guitarra.gif',
-            url: 'https://www.google.com'
-        })
-        .setDescription(`\n ‎ \n **Opções:\n** ${desc}`)
-        .setColor('#ffffff')
-        .setFooter({ text: 'musga' });
-
-    const response = await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
-
-    const collectorFilter = i => i.user.id === interaction.user.id;
-    
-    const confirmation = await response.awaitMessageComponent({ filter: collectorFilter, time: 60_000 }).then(i => {
-        enqueue({ video: searchResult.results[i.customId - 1], message: interaction });
-        interaction.deleteReply();
-    });
 }
 
 
@@ -213,7 +235,7 @@ async function playSong(connection, video, interaction) {
 
     
     
-        const youtubeLink = `https://www.youtube.com/watch?v=${video.id}`;
+        const youtubeLink = video.link ? video.link : `https://www.youtube.com/watch?v=${video.id}`;
 
         const stream = ytdl(youtubeLink, { filter: 'audioonly', highWaterMark: 1 << 25 });
         const videoInfo = await ytdl.getBasicInfo(youtubeLink);
@@ -236,7 +258,7 @@ async function playSong(connection, video, interaction) {
                 url: 'https://www.google.com'
             })
             .setDescription(`\n ‎ \n **Detalhes da música :** [${video.title}](${youtubeLink})\n **Duração: ** ${Math.floor(parseInt(videoInfo.videoDetails.lengthSeconds) / 60)}:${parseInt(videoInfo.videoDetails.lengthSeconds) % 60} \n **Views: ** ${videoInfo.videoDetails.viewCount}\n **Canal:** [${video.channelTitle}](https://youtube.com/channel/${video.channelId})`)
-            .setImage(video.thumbnails.high.url) 
+            .setImage(video.thumbnails.high !== undefined ? video.thumbnails.high.url : video.thumbnails[0].url)
             .setColor('#ffffff')
             .setFooter({ text: 'TWBot' });
 
