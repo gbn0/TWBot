@@ -11,7 +11,9 @@ const {
 const ytdl = require('@distube/ytdl-core');
 const YouTubeSearch = require('youtube-search');
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
-const youtubeAPIKey = require('../../config.json').youtubeAPIKey;
+require('dotenv').config();
+
+const youtubeAPIKey = process.env.youtubeAPIKey;
 
 
 let isPaused = false;
